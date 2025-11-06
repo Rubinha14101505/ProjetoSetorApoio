@@ -6,6 +6,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy import create_engine
 import logging
 from functools import wraps
+from werkzeug.security import generate_password_hash
 
 # Configuração do Flask
 app = create_app()
@@ -51,11 +52,43 @@ def wait_for_db():
     with engine.connect():
         app.logger.info("Conexão bem-sucedida com o banco de dados!")
 
+def create_first_user():
+    """Cria o primeiro usuário administrador se não existir nenhum usuário"""
+    try:
+        from app.models import Usuario  # Import aqui para evitar circular imports
+        
+        # Verifica se já existe algum usuário
+        if Usuario.query.first() is None:
+            # Cria o primeiro usuário (administrador)
+            primeiro_usuario = Usuario(
+                nome='Administrador',
+                email='admin@admin.com',
+                senha=generate_password_hash('admin123'),  # Senha inicial
+                cargo='administrador'
+            )
+            
+            db.session.add(primeiro_usuario)
+            db.session.commit()
+            app.logger.info("✅ Primeiro usuário criado com sucesso!")
+            app.logger.info("📧 Email: admin@admin.com")
+            app.logger.info("🔑 Senha inicial: admin123")
+            app.logger.info("⚠️  Altere a senha no primeiro acesso!")
+        else:
+            app.logger.info("ℹ️  Já existem usuários no sistema.")
+            
+    except Exception as e:
+        app.logger.error(f"Erro ao criar primeiro usuário: {e}")
+        # Não levanta exceção para não impedir o app de rodar
+
 with app.app_context():
     try:
         wait_for_db()  # Espera pela conexão com o banco de dados
         db.create_all()  # Cria as tabelas do banco
         app.logger.info("Tabelas criadas com sucesso!")
+        
+        # Cria o primeiro usuário se necessário
+        create_first_user()
+        
     except Exception as e:
         app.logger.error(f"Erro ao criar as tabelas do banco de dados: {e}")
         raise
